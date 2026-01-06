@@ -1,6 +1,8 @@
 import os
 import stat
-from cryptography.fernet import Fernet  # Authenticated encryption (AES in CBC + HMAC, via Fernet)
+from cryptography.fernet import (
+    Fernet,
+)  # Authenticated encryption (AES in CBC + HMAC, via Fernet)
 
 KEY_FILE = "token.key"
 TOKEN_FILE = "token.txt"
