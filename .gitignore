@@ -2,3 +2,11 @@
 /__pycache__
 
 *.pyc
+
+*.db
+*.db-shm
+*.db-wal
+token.key
+token.txt
+/downloads
+/downloads/*
