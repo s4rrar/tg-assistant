@@ -5,6 +5,7 @@ from openpyxl import Workbook, load_workbook
 
 TABLES = [
     "settings",
+    "features",
     "admins",
     "admins_pending",
     "bans",

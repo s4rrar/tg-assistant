@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import time
 import threading
@@ -9,6 +10,8 @@ import telebot
 from telebot import apihelper
 
 from db import DB
+from config import load_config
+import features
 from security import load_decrypted_token, save_encrypted_token
 from ollama_client import OllamaClient
 from excel_io import export_db_to_xlsx, import_xlsx_to_db
@@ -141,6 +144,7 @@ def user_help_text(trigger_name: str, bot_username: str) -> str:
         "• Reply to one of my messages\n\n"
         "Commands:\n"
         "/help – this message\n"
+        "/features – list enabled features\n"
     )
 
 
@@ -150,6 +154,13 @@ def admin_commands_text() -> str:
         "/commands\n"
         "/bot_enable | /bot_disable\n"
         "/backup_enable | /backup_disable\n"
+        "/reload\n"
+        "\nFeatures:\n"
+        "/features\n"
+        "/enabled_features | /disabled_features\n"
+        "/feature_enable <name> | /feature_disable <name>\n"
+        "/features_enable_all | /features_disable_all\n"
+        "\nModeration / data:\n"
         "/admins_list\n"
         "/admin_add <id|@username>\n"
         "/admin_remove <id>\n"
@@ -208,6 +219,7 @@ def main():
     apihelper.RETRY_ON_ERROR = True
 
     db = DB(DB_PATH)
+    cfg = load_config()
     token = first_run_setup_token()
     first_run_setup_admins(db)
 
@@ -216,7 +228,11 @@ def main():
     bot_id = me.id
     bot_username = (me.username or "").strip() or "bot"
 
-    ollama = OllamaClient()
+    ollama = OllamaClient(
+        base_url=cfg.ollama.url,
+        model=cfg.ollama.model,
+        timeout_s=cfg.ollama.timeout_s,
+    )
 
     # Backup scheduler thread
     threading.Thread(target=schedule_daily_backup, args=(bot, db), daemon=True).start()
@@ -225,11 +241,12 @@ def main():
     last_user_call: dict[int, float] = {}
     rl_lock = threading.Lock()
 
-    def rate_limited(user_id: int, cooldown_s: float = 1.5) -> bool:
+    def rate_limited(user_id: int, cooldown_s: float | None = None) -> bool:
         with rl_lock:
             now = time.time()
             prev = last_user_call.get(user_id, 0.0)
-            if now - prev < cooldown_s:
+            cd = float(cooldown_s if cooldown_s is not None else cfg.bot.rate_limit_seconds)
+            if now - prev < cd:
                 return True
             last_user_call[user_id] = now
             return False
@@ -257,6 +274,15 @@ def main():
     def safe_send(chat_id: int, text: str):
         return bot.send_message(chat_id, text, parse_mode=None)
 
+    # ---------------- features (modular commands) ----------------
+    features.register_features(
+        bot,
+        db,
+        cfg,
+        safe_reply=safe_reply,
+        require_admin=require_admin,
+    )
+
     # ---------------- user help ----------------
     @bot.message_handler(commands=["start", "help"])
     def cmd_help(message):
@@ -269,6 +295,16 @@ def main():
         if not require_admin(message):
             return
         safe_reply(message, admin_commands_text())
+
+    @bot.message_handler(commands=["reload"])
+    def cmd_reload(message):
+        if not require_admin(message):
+            return
+        try:
+            safe_reply(message, "Reloading…")
+        except Exception:
+            pass
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     @bot.message_handler(commands=["bot_enable", "bot_disable"])
     def cmd_bot_toggle(message):

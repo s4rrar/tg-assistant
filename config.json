@@ -1,0 +1,15 @@
+{
+  "ollama": {
+    "url": "http://127.0.0.1:11434",
+    "model": "gemma3:1b",
+    "timeout_s": 180
+  },
+  "youtube": {
+    "download_dir": "downloads",
+    "max_file_mb": 45,
+    "default_mode": "audio"
+  },
+  "bot": {
+    "rate_limit_seconds": 1.5
+  }
+}

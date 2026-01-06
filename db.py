@@ -56,6 +56,18 @@ class DB:
         """)
 
         cur.execute("""
+        CREATE TABLE IF NOT EXISTS features (
+            name TEXT PRIMARY KEY,
+            scope TEXT NOT NULL CHECK(scope IN ('user','admin')),
+            description TEXT NOT NULL DEFAULT '',
+            commands TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+
+        cur.execute("""
         CREATE TABLE IF NOT EXISTS admins (
             user_id INTEGER PRIMARY KEY,
             added_at INTEGER NOT NULL
@@ -139,6 +151,7 @@ class DB:
         # Defaults
         self._set_default("bot_enabled", "1")
         self._set_default("backup_enabled", "0")
+        self._set_default("features_global_enabled", "1")
         self._set_default("trigger_name", "daddygpt")
         self._set_default("bot_display_name", "DaddyGPT")
         self._set_default("persona", "Helpful, safe, bilingual (Arabic/English) assistant.")
@@ -184,6 +197,87 @@ class DB:
 
     def backup_enabled(self) -> bool:
         return self.get_setting("backup_enabled") == "1"
+
+    # ---------- features ----------
+    def features_global_enabled(self) -> bool:
+        return self.get_setting("features_global_enabled") == "1"
+
+    def set_features_global_enabled(self, enabled: bool) -> None:
+        self.set_setting("features_global_enabled", "1" if enabled else "0")
+
+    def ensure_feature(
+        self,
+        name: str,
+        scope: str,
+        description: str,
+        commands: list[str] | None = None,
+        enabled_default: bool = True,
+    ) -> None:
+        """Create the feature row if missing; keep existing enabled value if already present."""
+        now = int(time.time())
+        commands_s = ",".join([c.strip().lstrip("/") for c in (commands or []) if c and c.strip()])
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO features(name, scope, description, commands, enabled, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (
+                    name.strip().lower(),
+                    scope,
+                    description or "",
+                    commands_s,
+                    1 if enabled_default else 0,
+                    now,
+                    now,
+                ),
+            )
+            # Update metadata (do not override enabled)
+            cur.execute(
+                """
+                UPDATE features
+                SET scope=?, description=?, commands=?, updated_at=?
+                WHERE name=?
+                """,
+                (scope, description or "", commands_s, now, name.strip().lower()),
+            )
+            cur.close()
+            self.conn.commit()
+
+    def list_features(self) -> list[sqlite3.Row]:
+        return self.q(
+            "SELECT name, scope, description, commands, enabled, created_at, updated_at FROM features ORDER BY name ASC"
+        )
+
+    def list_features_by_enabled(self, enabled: bool) -> list[sqlite3.Row]:
+        return self.q(
+            "SELECT name, scope, description, commands, enabled FROM features WHERE enabled=? ORDER BY name ASC",
+            (1 if enabled else 0,),
+        )
+
+    def get_feature(self, name: str) -> sqlite3.Row | None:
+        rows = self.q(
+            "SELECT name, scope, description, commands, enabled FROM features WHERE name=?",
+            (name.strip().lower(),),
+        )
+        return rows[0] if rows else None
+
+    def set_feature_enabled(self, name: str, enabled: bool) -> None:
+        self.e(
+            "UPDATE features SET enabled=?, updated_at=? WHERE name=?",
+            (1 if enabled else 0, int(time.time()), name.strip().lower()),
+        )
+
+    def is_feature_enabled(self, name: str) -> bool:
+        r = self.get_feature(name)
+        return bool(r) and int(r["enabled"]) == 1
+
+    def is_feature_active(self, name: str, *, bypass_global: bool = False) -> bool:
+        """Feature enabled AND (global enabled unless bypass_global)."""
+        if not bypass_global and not self.features_global_enabled():
+            return False
+        return self.is_feature_enabled(name)
 
     # ---------- admins ----------
     def admin_count(self) -> int:

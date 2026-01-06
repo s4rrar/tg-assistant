@@ -11,6 +11,7 @@ A security- and performance-focused Telegram bot built with **pyTelegramBotAPI**
   - Telegram **Bot Token** (stored encrypted in `token.txt`)
   - Initial **Admin ID(s)** (stored in `database.db`)
 - Admin panel (Telegram commands):
+  - /reload (restart process to pick up new features / clear lag)
   - Add/remove admins by **id** or **@username** (username becomes active after the user messages the bot once)
   - Enable/disable bot
   - Enable/disable daily 2AM backups (Asia/Hebron)
@@ -32,7 +33,13 @@ A security- and performance-focused Telegram bot built with **pyTelegramBotAPI**
 Optional env vars:
 - `OLLAMA_URL` (default `http://127.0.0.1:11434`)
 - `OLLAMA_MODEL` (default `gemma3:1b`)
+- `OLLAMA_TIMEOUT_S` (default `180`)
 - `BOT_TOKEN_KEY` (recommended): Fernet key for token encryption.
+
+Or edit `config.json` (recommended) to change:
+- Ollama URL / model / timeout
+- YouTube downloader defaults
+- Bot rate limit
 
 ### 2) Install Python deps
 ```bash
@@ -66,6 +73,10 @@ On the first run it will ask for:
 - `security.py` – token encryption/decryption
 - `ollama_client.py` – Ollama chat client
 - `excel_io.py` – export/import DB as Excel
+- `config.py` + `config.json` – settings
+- `features.py` – feature registry + /features admin controls
+- `features/` – folder for modular features
+  - `features/youtube.py` – YouTube video/audio downloader feature
 - `database.db` – SQLite database (auto-created if missing)
 - `backups/` – scheduled + manual Excel exports
 
