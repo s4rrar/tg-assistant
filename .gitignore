@@ -10,3 +10,6 @@ token.key
 token.txt
 /downloads
 /downloads/*
+
+/backups
+/backups/*

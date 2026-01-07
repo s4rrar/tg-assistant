@@ -245,7 +245,9 @@ def main():
         with rl_lock:
             now = time.time()
             prev = last_user_call.get(user_id, 0.0)
-            cd = float(cooldown_s if cooldown_s is not None else cfg.bot.rate_limit_seconds)
+            cd = float(
+                cooldown_s if cooldown_s is not None else cfg.bot.rate_limit_seconds
+            )
             if now - prev < cd:
                 return True
             last_user_call[user_id] = now
@@ -301,7 +303,7 @@ def main():
         if not require_admin(message):
             return
         try:
-            safe_reply(message, "Reloading…")
+            safe_reply(message, "Bot reloaded successfully!")
         except Exception:
             pass
         os.execv(sys.executable, [sys.executable] + sys.argv)
